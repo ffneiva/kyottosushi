@@ -1,0 +1,40 @@
+name: 📝 Conteúdo
+description: Corrigir ou atualizar texto, preço, horário, endereço ou telefone.
+title: 'content: '
+labels: ['conteúdo']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quase todo conteúdo do site vive em `src/lib/business.ts`. Se for só
+        trocar um dado, a mudança costuma ser de uma linha.
+
+  - type: input
+    id: onde
+    attributes:
+      label: Onde aparece
+      placeholder: Rodapé, horário de atendimento
+    validations:
+      required: true
+
+  - type: textarea
+    id: atual
+    attributes:
+      label: Como está hoje
+    validations:
+      required: true
+
+  - type: textarea
+    id: novo
+    attributes:
+      label: Como deve ficar
+    validations:
+      required: true
+
+  - type: input
+    id: fonte
+    attributes:
+      label: Fonte
+      description: >
+        De onde vem a informação nova. Para estatística, o link da fonte é
+        obrigatório — o site não publica número sem atribuição.

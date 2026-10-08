@@ -1,0 +1,23 @@
+# Normaliza a quebra de linha no repositório.
+* text=auto eol=lf
+
+# Scripts precisam de LF mesmo em checkout no Windows: com CRLF, o shebang vira
+# "#!/usr/bin/env bash\r" e o Linux não encontra o interpretador.
+*.sh text eol=lf
+
+# Binários: nunca converter.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.woff2 binary
+*.ico binary
+
+# Arquivos gerados — não poluem o diff de um PR nem contam como código escrito.
+public/fonts/** linguist-generated=true
+public/icon-*.png linguist-generated=true
+public/favicon*.png linguist-generated=true
+public/apple-touch-icon.png linguist-generated=true
+public/og.png linguist-generated=true
+package-lock.json linguist-generated=true

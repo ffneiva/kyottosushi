@@ -1,0 +1,161 @@
+# Deploy: S3 static website + Cloudflare na frente (sem CloudFront).
+#
+# O repositório é público: nenhum ID, ARN ou token aqui. O ARN da role é
+# SECRET (o GitHub mascara sozinho no log); o resto, Variables.
+#
+#   Secrets:    AWS_ROLE_ARN
+#   Variables:  AWS_REGION, S3_BUCKET_NAME, S3_WEBSITE_ENDPOINT, SITE_DOMINIO,
+#               ROTAS (opcional),
+#               VITE_GTAG_ID, VITE_SENTRY_DSN
+#   Environment: production (a role da AWS só confia nele)
+#
+# Sem purge da Cloudflare: o HTML vai com "max-age=0, must-revalidate" e a
+# borda não o guarda; os assets têm hash no nome.
+
+name: 🚀 Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez; se dois commits caírem juntos, só o último interessa.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # o OIDC troca o token do GitHub por credenciais AWS de 1 h
+
+jobs:
+  deploy:
+    name: Build & publicar
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.SITE_DOMINIO }}
+
+    env:
+      BUCKET: ${{ vars.S3_BUCKET_NAME }}
+      DOMINIO: ${{ vars.SITE_DOMINIO }}
+      ENDPOINT: ${{ vars.S3_WEBSITE_ENDPOINT }}
+      ROTAS: ${{ vars.ROTAS || 'C:/Program Files/Git/ /cardapio /politica-de-privacidade' }}
+      DIST: dist
+      DIR_HASH: assets
+      IMUTAVEL: public, max-age=31536000, immutable
+      SEM_CACHE: public, max-age=0, must-revalidate
+      UM_DIA: public, max-age=86400
+
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # o sitemap usa a data do último commit
+
+      - name: 🟢 Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 📦 Dependências
+        run: npm ci
+
+      - name: 🎨 Lint
+        run: npm run lint --if-present
+
+      - name: 🧪 Testes
+        run: npm test --if-present
+
+      - name: 🏗️ Build
+        run: npm run build
+        env:
+          VITE_GTAG_ID: ${{ vars.VITE_GTAG_ID }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+
+      - name: 🔐 Assumir a role na AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          mask-aws-account-id: true
+          role-session-name: github-deploy-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # O Content-Type vai explícito: o AWS CLI não conhece .woff2/.webp/.avif/
+      # .webmanifest. Ordem: assets → estáticos → HTML (o HTML novo nunca
+      # aponta para asset que ainda não subiu).
+      - name: 📤 Publicar no S3
+        run: |
+          TIPOS=("woff2:font/woff2" "woff:font/woff" "webp:image/webp" "avif:image/avif"
+                 "svg:image/svg+xml" "webmanifest:application/manifest+json"
+                 "js:text/javascript; charset=utf-8" "mjs:text/javascript; charset=utf-8"
+                 "css:text/css; charset=utf-8" "webm:video/webm" "mp4:video/mp4")
+          TEXTO=("html:text/html; charset=utf-8" "xml:application/xml; charset=utf-8"
+                 "txt:text/plain; charset=utf-8" "json:application/json; charset=utf-8")
+          cp_s3() { aws s3 cp "$DIST/" "s3://$BUCKET/" --recursive --only-show-errors "$@"; }
+          tem() { [ -n "$(find "$DIST" "$@" -type f -print -quit)" ]; }
+
+          EX=(); EXH=()
+          for p in "${TIPOS[@]}" "${TEXTO[@]}"; do EX+=(--exclude "*.${p%%:*}"); EXH+=(--exclude "$DIR_HASH/*.${p%%:*}"); done
+
+          echo "→ /$DIR_HASH/ (imutável)"
+          cp_s3 --exclude "*" --include "$DIR_HASH/*" "${EXH[@]}" --cache-control "$IMUTAVEL"
+          for p in "${TIPOS[@]}" "${TEXTO[@]}"; do
+            tem -path "$DIST/$DIR_HASH/*.${p%%:*}" || continue
+            cp_s3 --exclude "*" --include "$DIR_HASH/*.${p%%:*}" --content-type "${p#*:}" --cache-control "$IMUTAVEL"
+          done
+
+          echo "→ estáticos sem hash (1 dia)"
+          cp_s3 --exclude "$DIR_HASH/*" "${EX[@]}" --cache-control "$UM_DIA"
+          for p in "${TIPOS[@]}"; do
+            tem -name "*.${p%%:*}" -not -path "$DIST/$DIR_HASH/*" || continue
+            cp_s3 --exclude "*" --include "*.${p%%:*}" --exclude "$DIR_HASH/*" --content-type "${p#*:}" --cache-control "$UM_DIA"
+          done
+
+          echo "→ HTML / xml / txt / json (revalidar sempre)"
+          for p in "${TEXTO[@]}"; do
+            tem -name "*.${p%%:*}" -not -path "$DIST/$DIR_HASH/*" || continue
+            cp_s3 --exclude "*" --include "*.${p%%:*}" --exclude "$DIR_HASH/*" --content-type "${p#*:}" --cache-control "$SEM_CACHE"
+          done
+
+      # Só depois do HTML novo no ar. --size-only impede re-upload (que perderia
+      # Cache-Control e Content-Type); só apaga o que sobrou.
+      - name: 🗑️ Remover arquivos antigos
+        run: aws s3 sync "$DIST/" "s3://$BUCKET/" --delete --size-only --only-show-errors
+
+      # Um deploy verde com o site fora do ar é pior que um vermelho.
+      - name: ✅ Smoke test
+        run: |
+          codigo() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$1" || echo "000"; }
+          URL="https://$DOMINIO"
+          echo "Conferindo $URL"
+          falhou=0
+          for rota in $ROTAS; do
+            c=$(codigo "$URL$rota")
+            t=$(curl -s --max-time 20 "$URL$rota" | grep -o '<title>[^<]*' | head -1 | cut -c8-80 || true)
+            echo "  $rota → $c  $t"
+            [ "$c" = "200" ] || { echo "::error::$rota respondeu $c"; falhou=1; }
+            [ "$rota" != "/" ] || [ -n "$t" ] || { echo "::error::a home veio sem <title>"; falhou=1; }
+          done
+          # 404 de verdade: 403 = falta s3:ListBucket na policy; 200 = soft 404.
+          c=$(codigo "$URL/nao-existe-xyz-$RANDOM")
+          echo "  /nao-existe → $c (esperado 404)"
+          [ "$c" = "404" ] || { echo "::error::endereço inexistente devolveu $c"; falhou=1; }
+          for par in "woff2:font/woff2" "webp:image/webp" "avif:image/avif"; do
+            f=$(find "$DIST" -name "*.${par%%:*}" -type f -print -quit)
+            [ -n "$f" ] || continue
+            ct=$(curl -s -o /dev/null -w '%{content_type}' --max-time 20 "$URL/${f#"$DIST"/}")
+            echo "  *.${par%%:*} → $ct"
+            [ "${ct%%;*}" = "${par#*:}" ] || { echo "::error::*.${par%%:*} servido como $ct"; falhou=1; }
+          done
+          test "$falhou" -eq 0
+
+      - name: 📋 Resumo
+        run: |
+          {
+            echo "### 🚀 Deploy concluído"
+            echo ""
+            echo "- **Site:** https://$DOMINIO"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🍣 Pedidos
+    url: https://matafoomi.com.br/kyottosushi
+    about: Pedidos e dúvidas sobre o restaurante vão pelo app ou pelo WhatsApp da casa — este repositório é só o código do site.

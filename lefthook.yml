@@ -1,0 +1,23 @@
+# Ganchos de git. Rodam localmente, antes de o problema virar um PR vermelho.
+#
+# Instalação: `npx lefthook install` (o `prepare` do npm já faz isso no `npm ci`).
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: '*.{js,ts,jsx,tsx,json}'
+      run: npx biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+    typecheck:
+      glob: '*.{ts,tsx}'
+      run: npx tsc -b
+
+pre-push:
+  commands:
+    testes:
+      run: npm run test
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit {1}

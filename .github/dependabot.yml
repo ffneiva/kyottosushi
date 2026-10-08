@@ -1,0 +1,44 @@
+# Atualizações agrupadas, uma vez por semana.
+#
+# Agrupar é o ponto: um PR por dependência produz vinte PRs por mês num projeto
+# deste tamanho, e a reação a vinte PRs de bot é fechar todos sem ler. Dois PRs
+# agrupados por ecossistema é uma revisão que cabe numa segunda-feira.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      producao:
+        dependency-type: production
+        update-types: [minor, patch]
+      desenvolvimento:
+        dependency-type: development
+        update-types: [minor, patch]
+    # Salto de major fica de fora, e não por preguiça: na primeira semana o bot
+    # abriu PRs para TypeScript 5→7 e @types/node 24→26, e os dois quebraram o
+    # CI na hora — como era esperado, porque major é mudança incompatível por
+    # definição. O que isso produz é ruído recorrente que ensina a ignorar PR
+    # vermelho, que é justamente o hábito que o CI existe para evitar.
+    #
+    # Major se atualiza à mão, lendo o changelog. Atualização de SEGURANÇA passa
+    # por cima desta regra e continua chegando — o Dependabot trata alerta de
+    # vulnerabilidade separadamente de bump de versão.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: 'chore(ci)'

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/main.tsx", "scripts/*.mjs", "tests/**/*.{ts,tsx}"],
+  "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs", "tests/**/*.{ts,tsx}"],
+  "ignore": ["scratch/**"],
+  "ignoreDependencies": [
+    "@vitest/coverage-v8",
+    "lefthook",
+    "@commitlint/config-conventional",
+    "tailwindcss"
+  ],
+  "compilers": { "css": false }
+}

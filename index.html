@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#15110e" />
+    <meta name="color-scheme" content="dark light" />
+
+    <title>Kyotto Sushi</title>
+    <meta name="description" content="" />
+    <link rel="canonical" href="" />
+    <meta name="robots" content="" />
+    <meta name="author" content="Kyotto Sushi" />
+    <meta name="geo.region" content="BR-GO" />
+    <meta name="geo.placename" content="Senador Canedo" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kyotto Sushi" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content="" />
+    <meta property="og:description" content="" />
+    <meta property="og:url" content="" />
+    <meta property="og:image" content="" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="" />
+    <meta name="twitter:description" content="" />
+    <meta name="twitter:image" content="" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!--
+      Só duas fontes pré-carregadas: a Fraunces (o <h1>) e a Hanken (o corpo),
+      ambas no subset latin. A japonesa tem 17 kB e só aparece em detalhe
+      decorativo; pré-carregá-la competiria com o título pela banda.
+    -->
+    <link rel="preload" href="/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/hanken-latin.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!--
+      Sem JavaScript o site não renderiza. Quem chegar assim sai com o que
+      precisa: onde a casa entrega, o horário e como pedir. O bloco é
+      reescrito no build a partir de business.ts (ver vite.config.ts).
+    -->
+    <noscript>
+      <div style="padding: 3rem 1.5rem; font-family: Georgia, serif; color: #f4efe6; background: #15110e">
+        <h1 style="font-size: 1.8rem; margin: 0 0 1rem">Kyotto Sushi</h1>
+        <p>Sushi delivery em Senador Canedo e região — todos os dias, das 18h às 23h.</p>
+        <p>Pedido mínimo de R$ 40,00. Dinheiro, cartão ou pagamento online.</p>
+        <p>
+          <a href="https://matafoomi.com.br/kyottosushi" style="color: #dcab5c">Pedir pelo app</a>
+          ·
+          <a href="https://wa.me/5562993198480" style="color: #dcab5c">WhatsApp (62) 99319-8480</a>
+          ·
+          <a href="https://www.instagram.com/kyotto_26/" style="color: #dcab5c">@kyotto_26</a>
+        </p>
+      </div>
+    </noscript>
+  </body>
+</html>

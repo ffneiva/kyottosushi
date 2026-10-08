@@ -1,0 +1,194 @@
+name: 🔍 CI
+
+# Roda em todo pull request e em todo push para main. O deploy (deploy.yml) só
+# acontece depois que este workflow passa — ver a dependência `needs` lá.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Um pipeline por branch. Um push novo cancela o anterior: ninguém precisa do
+# resultado de um commit que já foi substituído.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Qualidade estática. É o job mais rápido e o que falha mais — vem primeiro
+  # para dar retorno em menos de um minuto.
+  # ───────────────────────────────────────────────────────────────────────────
+  qualidade:
+    name: Lint, tipos e código morto
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: 🎨 Biome (lint + formatação)
+        run: npm run lint
+
+      - name: 🧾 TypeScript
+        run: npx tsc -b
+
+      # Knip encontra o que sobrou de um refactor: export sem consumidor,
+      # dependência que ninguém importa, arquivo órfão. São coisas que não
+      # quebram nada — e que, acumuladas, deixam o repositório ilegível para
+      # quem chega depois.
+      - name: 🧹 Knip (dependências e exports órfãos)
+        run: npm run knip
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Testes unitários — a lógica de negócio.
+  # ───────────────────────────────────────────────────────────────────────────
+  unitarios:
+    name: Testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: 🧪 Vitest com cobertura
+        run: npm run test:cov
+
+      # O Codecov é opcional: sem o token, o passo é pulado em vez de falhar.
+      # Um fork abrindo PR não tem acesso a secrets, e um CI vermelho por isso
+      # ensinaria a ignorar CI vermelho.
+      - name: 📊 Enviar cobertura ao Codecov
+        if: ${{ !cancelled() && env.CODECOV_TOKEN != '' }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Ponta a ponta, contra o build de produção.
+  # ───────────────────────────────────────────────────────────────────────────
+  e2e:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Só o Chromium. Os três navegadores levariam ~4 minutos a mais para
+      # cobrir diferenças que este site — sem API — não
+      # tem. Quando aparecer um bug específico de Safari, entra o WebKit.
+      - name: 🎭 Instalar o Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: 🎭 Rodar os testes
+        run: npx playwright test
+
+      - name: 📎 Guardar o relatório
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Build + orçamento de peso.
+  # ───────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build e orçamento
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # O sitemap usa a data do último commit; sem o histórico, `git log`
+          # não devolve nada e o lastmod cai para a data de hoje.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: 🖥️ Smoke test do dev server
+        run: npm run check:dev
+
+      - name: 🏗️ Build
+        run: npm run build
+
+      # O orçamento existe para pegar a regressão silenciosa: alguém importa uma
+      # biblioteca de ícones inteira por causa de um ícone, o bundle dobra e
+      # ninguém percebe até a conta do anúncio piorar.
+      #
+      # O limite é sobre o CAMINHO CRÍTICO — o que o navegador baixa antes do
+      # primeiro paint. O chunk do three.js fica de fora porque é carregado sob
+      # demanda, depois de a página estar interativa.
+      - name: ⚖️ Conferir o orçamento do caminho crítico
+        run: |
+          LIMITE_KB=170
+          CRITICO=$(find dist/assets -name 'index-*.js' -o -name 'index-*.css' | tr '\n' ' ')
+          TOTAL=0
+          for f in $CRITICO; do
+            KB=$(gzip -c "$f" | wc -c)
+            TOTAL=$((TOTAL + KB))
+            echo "  $(basename "$f"): $((KB / 1024)) kB gzip"
+          done
+          TOTAL_KB=$((TOTAL / 1024))
+          echo ""
+          echo "Caminho crítico: ${TOTAL_KB} kB gzip (limite ${LIMITE_KB} kB)"
+          {
+            echo "### ⚖️ Peso do caminho crítico"
+            echo ""
+            echo "**${TOTAL_KB} kB** comprimidos — limite de ${LIMITE_KB} kB."
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "$TOTAL_KB" -le "$LIMITE_KB"
+
+      # Sem isto, um erro no plugin de rotas passaria despercebido até alguém
+      # abrir /cardapio em produção e receber a home.
+      - name: 📄 Conferir que todos os arquivos esperados existem
+        run: |
+          faltando=0
+          for arquivo in \
+            dist/index.html \
+            dist/404.html \
+            dist/cardapio/index.html \
+            dist/politica-de-privacidade/index.html \
+            dist/sitemap.xml \
+            dist/llms.txt \
+            dist/robots.txt \
+            dist/site.webmanifest \
+            dist/og.jpg \
+            dist/favicon.svg
+          do
+            if [ -f "$arquivo" ]; then
+              echo "  ok    $arquivo"
+            else
+              echo "  FALTA $arquivo"
+              faltando=$((faltando + 1))
+            fi
+          done
+          test "$faltando" -eq 0

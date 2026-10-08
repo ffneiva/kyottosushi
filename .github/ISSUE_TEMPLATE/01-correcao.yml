@@ -1,0 +1,52 @@
+name: 🐛 Correção
+description: Alguma coisa no site não está funcionando como deveria.
+title: 'fix: '
+labels: ['correção']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Toda tarefa vira uma issue, e toda issue vira um PR que a menciona.
+        Ver `AGENTS.md` na raiz para o fluxo completo.
+
+  - type: textarea
+    id: o-que-acontece
+    attributes:
+      label: O que acontece
+      description: Descreva o comportamento observado, não a causa suposta.
+      placeholder: Em telas de 320 px, o título do herói quebra em cima do botão.
+    validations:
+      required: true
+
+  - type: textarea
+    id: como-reproduzir
+    attributes:
+      label: Como reproduzir
+      value: |
+        1. Abrir …
+        2. Rolar até …
+        3. Observar …
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que deveria acontecer
+    validations:
+      required: true
+
+  - type: input
+    id: onde
+    attributes:
+      label: Onde
+      description: Rota, navegador e tamanho de tela.
+      placeholder: /cardapio · Chrome 141 · iPhone 13 (390×844)
+
+  - type: checkboxes
+    id: confirmacoes
+    attributes:
+      label: Antes de abrir
+      options:
+        - label: Confirmei que acontece no site publicado, e não só localmente.
+        - label: Procurei uma issue aberta sobre o mesmo problema.
