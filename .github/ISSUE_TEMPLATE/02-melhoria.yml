@@ -1,0 +1,42 @@
+name: ✨ Melhoria
+description: Uma mudança em algo que já existe.
+title: 'feat: '
+labels: ['melhoria']
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isto resolve
+      description: >
+        Comece pelo problema, não pela solução. "A seção de combos exige seis
+        rolagens no celular" é um problema; "usar carrossel" é uma solução — e
+        pode não ser a certa.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Proposta
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: O que foi descartado, e por quê
+      description: Opcional, mas é a parte que fica valendo daqui a seis meses.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - Conteúdo e texto
+        - Interface e animação
+        - SEO e dados estruturados
+        - Acessibilidade
+        - Desempenho
+        - Infraestrutura e deploy
+    validations:
+      required: true
